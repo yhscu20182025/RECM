@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import numpy as np
+import torch.nn.functional as F
 eps=1e-8
 
 class Loss(nn.Module):
@@ -21,6 +23,26 @@ class Loss(nn.Module):
         for i in range(N//2):
             mask[i, N//2 + i] = 0
             mask[N//2 + i, i] = 0
+        mask = mask.bool()
+        return mask
+
+    def mask_correlated_samples2(self, N):
+        m1 = torch.ones((N//2, N//2))
+        m1 = m1.fill_diagonal_(0)
+        m2 = torch.zeros((N//2, N//2))
+        mask1 = torch.cat([m1, m2], dim=1)
+        mask2 = torch.cat([m2, m1], dim=1)
+        mask = torch.cat([mask1, mask2], dim=0)
+        mask = mask.bool()
+        return mask
+
+    def mask_correlated_samples3(self, N):
+        m1 = torch.ones((N//2, N//2))
+        m1 = m1.fill_diagonal_(0)
+        m2 = torch.zeros((N//2, N//2))
+        mask1 = torch.cat([m2, m1], dim=1)
+        mask2 = torch.cat([m1, m2], dim=1)
+        mask = torch.cat([mask1, mask2], dim=0)
         mask = mask.bool()
         return mask
 
@@ -97,3 +119,18 @@ class Loss(nn.Module):
         loss = self.criterion(logits, labels)
         loss /= N
         return loss
+
+    def forward_feature(self, h_i, h_j,r=3.0):
+        z1=h_i
+        z2=h_j
+        mask1 = (torch.norm(z1, p=2, dim=1) < np.sqrt(r)).float().unsqueeze(1)
+        mask2 = (torch.norm(z2, p=2, dim=1) < np.sqrt(r)).float().unsqueeze(1)
+        z1 = mask1 * z1 + (1 - mask1) * F.normalize(z1, dim=1) * np.sqrt(r)
+        z2 = mask2 * z2 + (1 - mask2) * F.normalize(z2, dim=1) * np.sqrt(r)
+        loss_part1 = -2 * torch.sum(z1 * z2, dim=1, keepdim=True) / z1.shape[0]
+        square_term = torch.matmul(z1, z2.T) ** 2
+        loss_part2 = torch.sum(torch.triu(square_term, diagonal=1) + torch.tril(square_term, diagonal=-1), dim=1,
+                               keepdim=True) \
+                     / (z1.shape[0] * (z1.shape[0] - 1))
+
+        return loss_part1 + loss_part2
