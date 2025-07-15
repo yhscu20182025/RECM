@@ -35,7 +35,7 @@ model = Network(view, dims, feature_dim, high_feature_dim, mid_dim, layers1, lay
 model = model.to(device)
 
 # 仅加载最终训练好的模型权重
-checkpoint = torch.load(f'../../Models/RECM/{Dataname}.pth', map_location=device)
+checkpoint = torch.load(f'../../Models/{Dataname}.pth', map_location=device)
 model.load_state_dict(checkpoint)
 mask = get_mask(view, data_size)
 print("dataname:"+dataname)
